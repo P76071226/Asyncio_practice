@@ -3,6 +3,13 @@ import asyncio
 import time
 
 MAX_RETRIES = 3
+semaphore = asyncio.Semaphore(5)
+
+async def fetch_with_limit(session, url, idx):
+    print(f"Task {idx} is running... ({semaphore._value} slots left)")
+    async with semaphore:
+        await fetch(session, url, idx)
+
 async def fetch(session, url, idx):
     for attempt in range(1, MAX_RETRIES+1):
         try:
@@ -13,15 +20,15 @@ async def fetch(session, url, idx):
                 return
         except Exception as e:
             print(f"Task {idx}:Attempt {attempt} failed ({repr(e)})")
-            await asyncio.sleep(2)
+            await asyncio.sleep(0.5)
     print(f"Task {idx}: Failed after {MAX_RETRIES} attempts")
 
 async def main():
-    urls = [f"https://httpbin.org/delay/{i % 3}" for i in range(20)]
+    urls = [f"https://httpbin.org/delay/{i % 3}" for i in range(100)]
 
     async with aiohttp.ClientSession() as session:
         tasks = [
-            fetch(session, url, idx)
+            fetch_with_limit(session, url, idx)
             for idx, url in enumerate(urls)
         ]
         await asyncio.gather(*tasks)
